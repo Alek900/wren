@@ -937,6 +937,18 @@ static int emitJump(Compiler* compiler, Code instruction)
   return emit(compiler, 0xff) - 1;
 }
 
+// Emits [instruction] followed by [symbol] and 
+// [numArgs] with the argument count.
+// This should only be used with CODE_CALL or CODE_SUPER instruction
+static void emitMethodCall(Compiler* compiler, Code instruction, 
+                           uint16_t symbol, uint8_t numArgs)
+{
+  ASSERT(instruction == CODE_CALL || instruction == CODE_SUPER,
+         "Invalid instruction for calling method.");
+  emitShort(compiler, instruction, symbol);
+  emit(compiler, numArgs);
+}
+
 // Create a new local variable with [name]. Assumes the current scope is local
 // and the name is unique.
 static int defineLocal(Compiler* compiler, const char* name, int length)
@@ -1494,8 +1506,8 @@ static void methodCall(Compiler* compiler, Code instruction,
 
   // TODO: Allow Grace-style mixfix methods?
 
-  emitShort(compiler, instruction + numArgs,
-            methodSymbol(compiler, name, length));
+  emitMethodCall(compiler, instruction, 
+                 methodSymbol(compiler, name, length), numArgs);
 }
 
 // Compiles a call whose name is the previously consumed token. This includes
@@ -1518,7 +1530,8 @@ static void namedCall(Compiler* compiler, bool allowAssignment,
 
     // Compile the assigned value.
     expression(compiler);
-    emitShort(compiler, instruction + 1, methodSymbol(compiler, name, length));
+    emitMethodCall(compiler,instruction, 
+                   methodSymbol(compiler, name, length), 1);
   }
   else
   {
@@ -1584,7 +1597,8 @@ static void unaryOp(Compiler* compiler, bool allowAssignment)
   parsePrecedence(compiler, false, PREC_UNARY + 1);
 
   // Call the operator method on the left-hand side.
-  emitShort(compiler, CODE_CALL_0, methodSymbol(compiler, rule->name, 1));
+  emitMethodCall(compiler, CODE_CALL, 
+                 methodSymbol(compiler, rule->name, 1), 0);
 }
 
 static void boolean(Compiler* compiler, bool allowAssignment)
@@ -1791,7 +1805,7 @@ static void name(Compiler* compiler, bool allowAssignment)
   }
 
   loadThis(compiler);
-  namedCall(compiler, allowAssignment, CODE_CALL_0);
+  namedCall(compiler, allowAssignment, CODE_CALL);
 }
 
 static void null(Compiler* compiler, bool allowAssignment)
@@ -1853,7 +1867,7 @@ static void super_(Compiler* compiler, bool allowAssignment)
   {
     // Compile the superclass call.
     consume(compiler, TOKEN_NAME, "Expect method name after 'super.'.");
-    namedCall(compiler, allowAssignment, CODE_SUPER_0);
+    namedCall(compiler, allowAssignment, CODE_SUPER);
   }
   else
   {
@@ -1872,7 +1886,7 @@ static void super_(Compiler* compiler, bool allowAssignment)
     }
 
     // Call the superclass method with the same name.
-    methodCall(compiler, CODE_SUPER_0, name, length);
+    methodCall(compiler, CODE_SUPER, name, length);
   }
 }
 
@@ -1929,15 +1943,15 @@ static void subscript(Compiler* compiler, bool allowAssignment)
   }
 
   // Compile the method call.
-  emitShort(compiler, CODE_CALL_0 + numArgs,
-            methodSymbol(compiler, name, length));
+  emitMethodCall(compiler, CODE_CALL, 
+                 methodSymbol(compiler, name, length), numArgs);
 }
 
 static void call(Compiler* compiler, bool allowAssignment)
 {
   ignoreNewlines(compiler);
   consume(compiler, TOKEN_NAME, "Expect method name after '.'.");
-  namedCall(compiler, allowAssignment, CODE_CALL_0);
+  namedCall(compiler, allowAssignment, CODE_CALL);
 }
 
 static void new_(Compiler* compiler, bool allowAssignment)
@@ -1951,12 +1965,13 @@ static void new_(Compiler* compiler, bool allowAssignment)
   }
 
   // The leading space in the name is to ensure users can't call it directly.
-  emitShort(compiler, CODE_CALL_0, methodSymbol(compiler, " instantiate", 12));
+  emitMethodCall(compiler, CODE_CALL, 
+                 methodSymbol(compiler, " instantiate", 12), 0);
 
   // Invoke the constructor on the new instance.
   char name[MAX_METHOD_SIGNATURE];
   strcpy(name, "new");
-  methodCall(compiler, CODE_CALL_0, name, 3);
+  methodCall(compiler, CODE_CALL, name, 3);
 }
 
 static void is(Compiler* compiler, bool allowAssignment)
@@ -2027,7 +2042,8 @@ void infixOp(Compiler* compiler, bool allowAssignment)
   parsePrecedence(compiler, false, rule->precedence + 1);
 
   // Call the operator method on the left-hand side.
-  emitShort(compiler, CODE_CALL_1, methodSymbol(compiler, rule->name, 0));
+  emitMethodCall(compiler, CODE_CALL,
+                 methodSymbol(compiler, rule->name, 0), 1);
 }
 
 // Compiles a method signature for an infix operator.
@@ -2256,40 +2272,6 @@ static int getNumArguments(const uint8_t* bytecode, const Value* constants,
     case CODE_CONSTANT:
     case CODE_LOAD_GLOBAL:
     case CODE_STORE_GLOBAL:
-    case CODE_CALL_0:
-    case CODE_CALL_1:
-    case CODE_CALL_2:
-    case CODE_CALL_3:
-    case CODE_CALL_4:
-    case CODE_CALL_5:
-    case CODE_CALL_6:
-    case CODE_CALL_7:
-    case CODE_CALL_8:
-    case CODE_CALL_9:
-    case CODE_CALL_10:
-    case CODE_CALL_11:
-    case CODE_CALL_12:
-    case CODE_CALL_13:
-    case CODE_CALL_14:
-    case CODE_CALL_15:
-    case CODE_CALL_16:
-    case CODE_SUPER_0:
-    case CODE_SUPER_1:
-    case CODE_SUPER_2:
-    case CODE_SUPER_3:
-    case CODE_SUPER_4:
-    case CODE_SUPER_5:
-    case CODE_SUPER_6:
-    case CODE_SUPER_7:
-    case CODE_SUPER_8:
-    case CODE_SUPER_9:
-    case CODE_SUPER_10:
-    case CODE_SUPER_11:
-    case CODE_SUPER_12:
-    case CODE_SUPER_13:
-    case CODE_SUPER_14:
-    case CODE_SUPER_15:
-    case CODE_SUPER_16:
     case CODE_JUMP:
     case CODE_LOOP:
     case CODE_JUMP_IF:
@@ -2298,6 +2280,9 @@ static int getNumArguments(const uint8_t* bytecode, const Value* constants,
     case CODE_METHOD_INSTANCE:
     case CODE_METHOD_STATIC:
       return 2;
+    case CODE_CALL:
+    case CODE_SUPER:
+      return 3;
 
     case CODE_CLOSURE:
     {
@@ -2434,7 +2419,8 @@ static void forStatement(Compiler* compiler)
   loadLocal(compiler, seqSlot);
   loadLocal(compiler, iterSlot);
 
-  emitShort(compiler, CODE_CALL_1, methodSymbol(compiler, "iterate ", 8));
+  emitMethodCall(compiler, CODE_CALL, 
+                 methodSymbol(compiler, "iterate ", 8), 1);
 
   // Store the iterator back in its local for the next iteration.
   emitByte(compiler, CODE_STORE_LOCAL, iterSlot);
@@ -2446,8 +2432,8 @@ static void forStatement(Compiler* compiler)
   loadLocal(compiler, seqSlot);
   loadLocal(compiler, iterSlot);
 
-  emitShort(compiler, CODE_CALL_1,
-            methodSymbol(compiler, "iteratorValue ", 14));
+  emitMethodCall(compiler, CODE_CALL,
+                 methodSymbol(compiler, "iteratorValue ", 14), 1);
 
   // Bind the loop variable in its own scope. This ensures we get a fresh
   // variable each iteration so that closures for it don't all see the same one.

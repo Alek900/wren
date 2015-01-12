@@ -456,40 +456,8 @@ static bool runInterpreter(WrenVM* vm)
     &&code_LOAD_FIELD,
     &&code_STORE_FIELD,
     &&code_POP,
-    &&code_CALL_0,
-    &&code_CALL_1,
-    &&code_CALL_2,
-    &&code_CALL_3,
-    &&code_CALL_4,
-    &&code_CALL_5,
-    &&code_CALL_6,
-    &&code_CALL_7,
-    &&code_CALL_8,
-    &&code_CALL_9,
-    &&code_CALL_10,
-    &&code_CALL_11,
-    &&code_CALL_12,
-    &&code_CALL_13,
-    &&code_CALL_14,
-    &&code_CALL_15,
-    &&code_CALL_16,
-    &&code_SUPER_0,
-    &&code_SUPER_1,
-    &&code_SUPER_2,
-    &&code_SUPER_3,
-    &&code_SUPER_4,
-    &&code_SUPER_5,
-    &&code_SUPER_6,
-    &&code_SUPER_7,
-    &&code_SUPER_8,
-    &&code_SUPER_9,
-    &&code_SUPER_10,
-    &&code_SUPER_11,
-    &&code_SUPER_12,
-    &&code_SUPER_13,
-    &&code_SUPER_14,
-    &&code_SUPER_15,
-    &&code_SUPER_16,
+    &&code_CALL,
+    &&code_SUPER,
     &&code_JUMP,
     &&code_LOOP,
     &&code_JUMP_IF,
@@ -568,31 +536,18 @@ static bool runInterpreter(WrenVM* vm)
     CASE_CODE(NULL):  PUSH(NULL_VAL); DISPATCH();
     CASE_CODE(FALSE): PUSH(FALSE_VAL); DISPATCH();
     CASE_CODE(TRUE):  PUSH(TRUE_VAL); DISPATCH();
-
-    CASE_CODE(CALL_0):
-    CASE_CODE(CALL_1):
-    CASE_CODE(CALL_2):
-    CASE_CODE(CALL_3):
-    CASE_CODE(CALL_4):
-    CASE_CODE(CALL_5):
-    CASE_CODE(CALL_6):
-    CASE_CODE(CALL_7):
-    CASE_CODE(CALL_8):
-    CASE_CODE(CALL_9):
-    CASE_CODE(CALL_10):
-    CASE_CODE(CALL_11):
-    CASE_CODE(CALL_12):
-    CASE_CODE(CALL_13):
-    CASE_CODE(CALL_14):
-    CASE_CODE(CALL_15):
-    CASE_CODE(CALL_16):
+    CASE_CODE(CALL):
+    CASE_CODE(SUPER):
     {
       // Add one for the implicit receiver argument.
-      int numArgs = instruction - CODE_CALL_0 + 1;
       int symbol = READ_SHORT();
+      int numArgs = READ_BYTE() + 1;
 
       Value receiver = *(fiber->stackTop - numArgs);
       ObjClass* classObj = wrenGetClassInline(vm, receiver);
+
+      if (instruction == CODE_SUPER)
+        classObj = classObj->superclass;
 
       // If the class's method table doesn't include the symbol, bail.
       if (symbol >= classObj->methods.count)
@@ -658,93 +613,6 @@ static bool runInterpreter(WrenVM* vm)
     CASE_CODE(CONSTANT):
       PUSH(fn->constants[READ_SHORT()]);
       DISPATCH();
-
-    CASE_CODE(SUPER_0):
-    CASE_CODE(SUPER_1):
-    CASE_CODE(SUPER_2):
-    CASE_CODE(SUPER_3):
-    CASE_CODE(SUPER_4):
-    CASE_CODE(SUPER_5):
-    CASE_CODE(SUPER_6):
-    CASE_CODE(SUPER_7):
-    CASE_CODE(SUPER_8):
-    CASE_CODE(SUPER_9):
-    CASE_CODE(SUPER_10):
-    CASE_CODE(SUPER_11):
-    CASE_CODE(SUPER_12):
-    CASE_CODE(SUPER_13):
-    CASE_CODE(SUPER_14):
-    CASE_CODE(SUPER_15):
-    CASE_CODE(SUPER_16):
-    {
-      // TODO: Almost completely copied from CALL. Unify somehow.
-
-      // Add one for the implicit receiver argument.
-      int numArgs = instruction - CODE_SUPER_0 + 1;
-      int symbol = READ_SHORT();
-
-      Value receiver = *(fiber->stackTop - numArgs);
-      ObjClass* classObj = wrenGetClassInline(vm, receiver);
-
-      // Ignore methods defined on the receiver's immediate class.
-      classObj = classObj->superclass;
-
-      // If the class's method table doesn't include the symbol, bail.
-      if (symbol >= classObj->methods.count)
-      {
-        RUNTIME_ERROR(methodNotFound(vm, classObj, symbol));
-      }
-
-      Method* method = &classObj->methods.data[symbol];
-      switch (method->type)
-      {
-        case METHOD_PRIMITIVE:
-        {
-          Value* args = fiber->stackTop - numArgs;
-
-          // After calling this, the result will be in the first arg slot.
-          switch (method->fn.primitive(vm, fiber, args))
-          {
-            case PRIM_VALUE:
-              // The result is now in the first arg slot. Discard the other
-              // stack slots.
-              fiber->stackTop -= numArgs - 1;
-              break;
-
-            case PRIM_ERROR:
-              RUNTIME_ERROR(AS_STRING(args[0]));
-
-            case PRIM_CALL:
-              STORE_FRAME();
-              callFunction(fiber, AS_OBJ(args[0]), numArgs);
-              LOAD_FRAME();
-              break;
-
-            case PRIM_RUN_FIBER:
-              STORE_FRAME();
-              fiber = AS_FIBER(args[0]);
-              LOAD_FRAME();
-              break;
-          }
-          break;
-        }
-
-        case METHOD_FOREIGN:
-          callForeign(vm, fiber, method->fn.foreign, numArgs);
-          break;
-
-        case METHOD_BLOCK:
-          STORE_FRAME();
-          callFunction(fiber, method->fn.obj, numArgs);
-          LOAD_FRAME();
-          break;
-
-        case METHOD_NONE:
-          RUNTIME_ERROR(methodNotFound(vm, classObj, symbol));
-          break;
-      }
-      DISPATCH();
-    }
 
     CASE_CODE(LOAD_UPVALUE):
     {

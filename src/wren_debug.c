@@ -111,53 +111,18 @@ static int debugPrintInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
 
     case CODE_POP: printf("POP\n"); break;
 
-    case CODE_CALL_0:
-    case CODE_CALL_1:
-    case CODE_CALL_2:
-    case CODE_CALL_3:
-    case CODE_CALL_4:
-    case CODE_CALL_5:
-    case CODE_CALL_6:
-    case CODE_CALL_7:
-    case CODE_CALL_8:
-    case CODE_CALL_9:
-    case CODE_CALL_10:
-    case CODE_CALL_11:
-    case CODE_CALL_12:
-    case CODE_CALL_13:
-    case CODE_CALL_14:
-    case CODE_CALL_15:
-    case CODE_CALL_16:
+    case CODE_CALL:
+    case CODE_SUPER:
     {
-      int numArgs = bytecode[i - 1] - CODE_CALL_0;
       int symbol = READ_SHORT();
-      printf("CALL_%-11d %5d '%s'\n", numArgs, symbol,
-             vm->methodNames.data[symbol]);
-      break;
-    }
+      int numArgs = READ_BYTE();
+      if (code == CODE_SUPER)
+        printf("SUPER ");
+      else
+        printf("CALL ");
 
-    case CODE_SUPER_0:
-    case CODE_SUPER_1:
-    case CODE_SUPER_2:
-    case CODE_SUPER_3:
-    case CODE_SUPER_4:
-    case CODE_SUPER_5:
-    case CODE_SUPER_6:
-    case CODE_SUPER_7:
-    case CODE_SUPER_8:
-    case CODE_SUPER_9:
-    case CODE_SUPER_10:
-    case CODE_SUPER_11:
-    case CODE_SUPER_12:
-    case CODE_SUPER_13:
-    case CODE_SUPER_14:
-    case CODE_SUPER_15:
-    case CODE_SUPER_16:
-    {
-      int numArgs = bytecode[i - 1] - CODE_SUPER_0;
-      int symbol = READ_SHORT();
-      printf("SUPER_%-10d %5d '%s'\n", numArgs, symbol,
-             vm->methodNames.data[symbol]);
+      printf("%-14d '%s' with %d args\n", symbol,
+             vm->methodNames.data[symbol], numArgs);
       break;
     }
 
